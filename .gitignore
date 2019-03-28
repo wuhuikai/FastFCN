@@ -1,0 +1,12 @@
+*.DS_Store
+*.swp
+*.pyc
+
+version.py
+
+data/
+build/
+encoding/_ext/
+encoding.egg-info/
+
+.idea
