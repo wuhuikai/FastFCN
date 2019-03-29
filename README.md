@@ -1,5 +1,5 @@
 # FastFCN: Rethinking Dilated Convolution in the Backbone for Semantic Segmentation
-[[Project]](http://wuhuikai.me/FastFCNProject/)    [[Paper]](http://wuhuikai.me/FastFCNProject/fast_fcn.pdf)    [[arXiv]]()    [[Home]](http://wuhuikai.me)
+[[Project]](http://wuhuikai.me/FastFCNProject/)    [[Paper]](http://wuhuikai.me/FastFCNProject/fast_fcn.pdf)    [[arXiv]](https://arxiv.org/abs/1903.11816)    [[Home]](http://wuhuikai.me)
 
 Official implementation of **FastFCN: Rethinking Dilated Convolution in the Backbone for Semantic Segmentation**.   
 A **Faster**, **Stronger** and **Lighter** framework for semantic segmentation, achieving the state-of-the-art performance and more than **3x** acceleration.
@@ -7,7 +7,7 @@ A **Faster**, **Stronger** and **Lighter** framework for semantic segmentation, 
 @inproceedings{wu2019fastfcn,
   title     = {FastFCN: Rethinking Dilated Convolution in the Backbone for Semantic Segmentation},
   author    = {Wu, Huikai and Zhang, Junge and Huang, Kaiqi and Liang, Kongming and Yu Yizhou},
-  booktitle = {arXiv},
+  booktitle = {arXiv preprint arXiv:1903.11816},
   year = {2019}
 }
 ```
