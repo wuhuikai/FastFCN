@@ -3,7 +3,7 @@
 #train
 CUDA_VISIBLE_DEVICES=0,1,2,3 python train.py --dataset pcontext \
     --model encnet --jpu --aux --se-loss \
-    --backbone resnet50 --ckeckname encnet_res50_pcontext
+    --backbone resnet50 --checkname encnet_res50_pcontext
 
 #test [single-scale]
 CUDA_VISIBLE_DEVICES=0,1,2,3 python test.py --dataset pcontext \
