@@ -110,4 +110,4 @@ def test_batchify_fn(data):
     elif isinstance(data[0], (tuple, list)):
         data = zip(*data)
         return [test_batchify_fn(i) for i in data]
-    raise TypeError((error_msg.format(type(batch[0]))))
+    raise TypeError((error_msg.format(type(data[0]))))

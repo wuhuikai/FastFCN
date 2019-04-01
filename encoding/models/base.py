@@ -99,7 +99,7 @@ class MultiEvalModule(DataParallel):
         inputs = [(input.unsqueeze(0).cuda(device),)
                   for input, device in zip(inputs, self.device_ids)]
         replicas = self.replicate(self, self.device_ids[:len(inputs)])
-        kwargs = scatter(kwargs, target_gpus, dim) if kwargs else []
+        kwargs = []
         if len(inputs) < len(kwargs):
             inputs.extend([() for _ in range(len(kwargs) - len(inputs))])
         elif len(kwargs) < len(inputs):
