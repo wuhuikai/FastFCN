@@ -1,5 +1,7 @@
 # FastFCN: Rethinking Dilated Convolution in the Backbone for Semantic Segmentation
-[[Project]](http://wuhuikai.me/FastFCNProject/)    [[Paper]](http://wuhuikai.me/FastFCNProject/fast_fcn.pdf)    [[arXiv]](https://arxiv.org/abs/1903.11816)    [[Home]](http://wuhuikai.me)
+[[Project]](http://wuhuikai.me/FastFCNProject/)    [[Paper]](http://wuhuikai.me/FastFCNProject/fast_fcn.pdf)    [[arXiv]](https://arxiv.org/abs/1903.11816)    [[Home]](http://wuhuikai.me) 
+
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/fastfcn-rethinking-dilated-convolution-in-the/semantic-segmentation-pascal-context)](https://paperswithcode.com/sota/semantic-segmentation-pascal-context?p=fastfcn-rethinking-dilated-convolution-in-the)
 
 Official implementation of **FastFCN: Rethinking Dilated Convolution in the Backbone for Semantic Segmentation**.   
 A **Faster**, **Stronger** and **Lighter** framework for semantic segmentation, achieving the state-of-the-art performance and more than **3x** acceleration.
