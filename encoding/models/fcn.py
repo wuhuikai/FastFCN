@@ -8,7 +8,7 @@ from __future__ import division
 import torch
 import torch.nn as nn
 
-from torch.nn.functional import upsample
+from torch.nn.functional import interpolate
 
 from .base import BaseNet
 
@@ -49,11 +49,11 @@ class FCN(BaseNet):
         _, _, c3, c4 = self.base_forward(x)
 
         x = self.head(c4)
-        x = upsample(x, imsize, **self._up_kwargs)
+        x = interpolate(x, imsize, **self._up_kwargs)
         outputs = [x]
         if self.aux:
             auxout = self.auxlayer(c3)
-            auxout = upsample(auxout, imsize, **self._up_kwargs)
+            auxout = interpolate(auxout, imsize, **self._up_kwargs)
             outputs.append(auxout)
         return tuple(outputs)
 

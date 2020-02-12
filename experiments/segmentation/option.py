@@ -24,7 +24,7 @@ class Options():
                             False, help='employ FPN')
         parser.add_argument('--dataset', type=str, default='ade20k',
                             help='dataset name (default: pascal12)')
-        parser.add_argument('--workers', type=int, default=16,
+        parser.add_argument('--workers', type=int, default=4,
                             metavar='N', help='dataloader threads')
         parser.add_argument('--base-size', type=int, default=520,
                             help='base image size')
@@ -82,9 +82,14 @@ class Options():
                             help='multi scale & flip')
         parser.add_argument('--no-val', action='store_true', default= False,
                             help='skip validation during training')
-        parser.add_argument('--save-folder', type=str, default='results',
+        parser.add_argument('--save-folder', type=str, default='experiments/segmentation/results',
                             help = 'path to save images')
-
+        # distributed training
+        parser.add_argument('--world-size', default=1, type=int, help='number of nodes for distributed training')
+        parser.add_argument('--rank', default=0, type=int, help='node rank for distributed training')
+        parser.add_argument('--dist-url', default='tcp://127.0.0.1:1735', type=str,
+                            help='url used to set up distributed training')
+        parser.add_argument('--dist-backend', default='nccl', type=str, help='distributed backend')
         # the parser
         self.parser = parser
 

@@ -1,12 +1,18 @@
 *.DS_Store
 *.swp
 *.pyc
+*.so
+*.o
+
+*ninja*
 
 version.py
 
+runs/
 data/
 build/
+results/
 encoding/_ext/
-encoding.egg-info/
+fast_fcn.egg-info/
 
 .idea

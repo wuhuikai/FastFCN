@@ -11,7 +11,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from torch.nn.parallel.scatter_gather import scatter
 from torch.nn.parallel.data_parallel import DataParallel
 
 from ..nn import JPU
@@ -186,7 +185,7 @@ def module_inference(module, image, flip=True):
     return output.exp()
 
 def resize_image(img, h, w, **up_kwargs):
-    return F.upsample(img, (h, w), **up_kwargs)
+    return F.interpolate(img, (h, w), **up_kwargs)
 
 def pad_image(img, mean, std, crop_size):
     b,c,h,w = img.size()

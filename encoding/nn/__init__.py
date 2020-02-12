@@ -9,6 +9,5 @@
 ##+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 """Encoding NN Modules"""
-from .syncbn import *
 from .encoding import *
 from .customize import *

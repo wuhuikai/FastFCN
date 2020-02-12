@@ -12,7 +12,6 @@
 import torch
 import torch.nn.functional as F
 
-from torch.autograd import Variable
 from torch.nn import Module, Parameter
 
 from ..functions import scaled_l2, aggregate

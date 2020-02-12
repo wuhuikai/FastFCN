@@ -25,31 +25,32 @@ class SegmentationLosses(CrossEntropyLoss):
     """2D Cross Entropy Loss with Auxilary Loss"""
     def __init__(self, se_loss=False, se_weight=0.2, nclass=-1,
                  aux=False, aux_weight=0.4, weight=None,
-                 size_average=True, ignore_index=-1):
-        super(SegmentationLosses, self).__init__(weight, size_average, ignore_index)
+                 reduction='mean', ignore_index=-1):
+        super(SegmentationLosses, self).__init__(weight, None, ignore_index, reduction=reduction)
         self.se_loss = se_loss
         self.aux = aux
         self.nclass = nclass
         self.se_weight = se_weight
         self.aux_weight = aux_weight
-        self.bceloss = BCELoss(weight, size_average) 
+        self.bceloss = BCELoss(weight, reduction=reduction)
 
     def forward(self, *inputs):
         if not self.se_loss and not self.aux:
-            return super(SegmentationLosses, self).forward(*inputs)
+            (pred1,), target = tuple(inputs)
+            return super(SegmentationLosses, self).forward(pred1, target)
         elif not self.se_loss:
-            pred1, pred2, target = tuple(inputs)
+            (pred1, pred2), target = tuple(inputs)
             loss1 = super(SegmentationLosses, self).forward(pred1, target)
             loss2 = super(SegmentationLosses, self).forward(pred2, target)
             return loss1 + self.aux_weight * loss2
         elif not self.aux:
-            pred, se_pred, target = tuple(inputs)
+            (pred, se_pred), target = tuple(inputs)
             se_target = self._get_batch_label_vector(target, nclass=self.nclass).type_as(pred)
             loss1 = super(SegmentationLosses, self).forward(pred, target)
             loss2 = self.bceloss(torch.sigmoid(se_pred), se_target)
             return loss1 + self.se_weight * loss2
         else:
-            pred1, se_pred, pred2, target = tuple(inputs)
+            (pred1, se_pred, pred2), target = tuple(inputs)
             se_target = self._get_batch_label_vector(target, nclass=self.nclass).type_as(pred1)
             loss1 = super(SegmentationLosses, self).forward(pred1, target)
             loss2 = super(SegmentationLosses, self).forward(pred2, target)
@@ -128,10 +129,10 @@ class PyramidPooling(Module):
 
     def forward(self, x):
         _, _, h, w = x.size()
-        feat1 = F.upsample(self.conv1(self.pool1(x)), (h, w), **self._up_kwargs)
-        feat2 = F.upsample(self.conv2(self.pool2(x)), (h, w), **self._up_kwargs)
-        feat3 = F.upsample(self.conv3(self.pool3(x)), (h, w), **self._up_kwargs)
-        feat4 = F.upsample(self.conv4(self.pool4(x)), (h, w), **self._up_kwargs)
+        feat1 = F.interpolate(self.conv1(self.pool1(x)), (h, w), **self._up_kwargs)
+        feat2 = F.interpolate(self.conv2(self.pool2(x)), (h, w), **self._up_kwargs)
+        feat3 = F.interpolate(self.conv3(self.pool3(x)), (h, w), **self._up_kwargs)
+        feat4 = F.interpolate(self.conv4(self.pool4(x)), (h, w), **self._up_kwargs)
         return torch.cat((x, feat1, feat2, feat3, feat4), 1)
 
 
@@ -168,24 +169,25 @@ class JPU(nn.Module):
             norm_layer(width),
             nn.ReLU(inplace=True))
 
-        self.dilation1 = nn.Sequential(SeparableConv2d(3*width, width, kernel_size=3, padding=1, dilation=1, bias=False),
+        norm_layer = lambda n_channels: nn.GroupNorm(32, n_channels)
+        self.dilation1 = nn.Sequential(SeparableConv2d(3*width, width, kernel_size=3, padding=1, dilation=1, bias=False, BatchNorm=norm_layer),
                                        norm_layer(width),
                                        nn.ReLU(inplace=True))
-        self.dilation2 = nn.Sequential(SeparableConv2d(3*width, width, kernel_size=3, padding=2, dilation=2, bias=False),
+        self.dilation2 = nn.Sequential(SeparableConv2d(3*width, width, kernel_size=3, padding=2, dilation=2, bias=False, BatchNorm=norm_layer),
                                        norm_layer(width),
                                        nn.ReLU(inplace=True))
-        self.dilation3 = nn.Sequential(SeparableConv2d(3*width, width, kernel_size=3, padding=4, dilation=4, bias=False),
+        self.dilation3 = nn.Sequential(SeparableConv2d(3*width, width, kernel_size=3, padding=4, dilation=4, bias=False, BatchNorm=norm_layer),
                                        norm_layer(width),
                                        nn.ReLU(inplace=True))
-        self.dilation4 = nn.Sequential(SeparableConv2d(3*width, width, kernel_size=3, padding=8, dilation=8, bias=False),
+        self.dilation4 = nn.Sequential(SeparableConv2d(3*width, width, kernel_size=3, padding=8, dilation=8, bias=False, BatchNorm=norm_layer),
                                        norm_layer(width),
                                        nn.ReLU(inplace=True))
 
     def forward(self, *inputs):
         feats = [self.conv5(inputs[-1]), self.conv4(inputs[-2]), self.conv3(inputs[-3])]
         _, _, h, w = feats[-1].size()
-        feats[-2] = F.upsample(feats[-2], (h, w), **self.up_kwargs)
-        feats[-3] = F.upsample(feats[-3], (h, w), **self.up_kwargs)
+        feats[-2] = F.interpolate(feats[-2], (h, w), **self.up_kwargs)
+        feats[-3] = F.interpolate(feats[-3], (h, w), **self.up_kwargs)
         feat = torch.cat(feats, dim=1)
         feat = torch.cat([self.dilation1(feat), self.dilation2(feat), self.dilation3(feat), self.dilation4(feat)], dim=1)
 

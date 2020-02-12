@@ -3,7 +3,7 @@ import time
 import torch
 import encoding
 
-from option import Options
+from .option import Options
 
 
 if __name__ == "__main__":

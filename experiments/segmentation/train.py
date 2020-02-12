@@ -5,29 +5,42 @@
 ###########################################################################
 
 import os
+import sys
 import numpy as np
 from tqdm import tqdm
 
 import torch
+from torch import nn
 from torch.utils import data
 import torchvision.transforms as transform
-from torch.nn.parallel.scatter_gather import gather
+
+import torch.distributed as dist
+import torch.multiprocessing as mp
 
 import encoding.utils as utils
-from encoding.nn import SegmentationLosses, BatchNorm2d
-from encoding.parallel import DataParallelModel, DataParallelCriterion
+from encoding.nn import SegmentationLosses
 from encoding.datasets import get_segmentation_dataset
 from encoding.models import get_segmentation_model
 
-from option import Options
+from .option import Options
 
 torch_ver = torch.__version__[:3]
 if torch_ver == '0.3':
     from torch.autograd import Variable
 
 class Trainer():
-    def __init__(self, args):
+    def __init__(self, gpu, ngpus_per_node, args):
+        self.gpu = gpu
+        self.ngpus_per_node = ngpus_per_node
         self.args = args
+
+        # distributed
+        print("Use GPU: {} for training".format(self.gpu))
+        args.rank = args.rank * self.ngpus_per_node + self.gpu
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
+                                world_size=args.world_size, rank=args.rank)
+        args.batch_size = args.batch_size // self.ngpus_per_node
+        args.workers = args.workers // self.ngpus_per_node
         # data transforms
         input_transform = transform.Compose([
             transform.ToTensor(),
@@ -39,20 +52,24 @@ class Trainer():
                                            **data_kwargs)
         testset = get_segmentation_dataset(args.dataset, split='val', mode ='val',
                                            **data_kwargs)
+        # sampler
+        self.train_sampler = data.distributed.DistributedSampler(trainset)
+        self.val_sampler = data.distributed.DistributedSampler(testset)
         # dataloader
         kwargs = {'num_workers': args.workers, 'pin_memory': True} \
             if args.cuda else {}
         self.trainloader = data.DataLoader(trainset, batch_size=args.batch_size,
-                                           drop_last=True, shuffle=True, **kwargs)
+                                           drop_last=True, shuffle=False, sampler=self.train_sampler, **kwargs)
         self.valloader = data.DataLoader(testset, batch_size=args.batch_size,
-                                         drop_last=False, shuffle=False, **kwargs)
+                                         drop_last=False, shuffle=False, sampler=self.val_sampler, **kwargs)
         self.nclass = trainset.num_class
         # model
         model = get_segmentation_model(args.model, dataset = args.dataset,
                                        backbone = args.backbone, dilated = args.dilated,
                                        lateral = args.lateral, jpu = args.jpu, aux = args.aux,
-                                       se_loss = args.se_loss, norm_layer = BatchNorm2d,
+                                       se_loss = args.se_loss, norm_layer = nn.BatchNorm2d,
                                        base_size = args.base_size, crop_size = args.crop_size)
+        model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
         print(model)
         # optimizer using different LR
         params_list = [{'params': model.pretrained.parameters(), 'lr': args.lr},]
@@ -72,13 +89,15 @@ class Trainer():
         self.model, self.optimizer = model, optimizer
         # using cuda
         if args.cuda:
-            self.model = DataParallelModel(self.model).cuda()
-            self.criterion = DataParallelCriterion(self.criterion).cuda()
+            torch.cuda.set_device(self.gpu)
+            self.model = nn.parallel.DistributedDataParallel(self.model.cuda(), device_ids=[self.gpu], find_unused_parameters=True)
+            self.criterion = self.criterion.cuda()
+        self.best_pred = 0.0
         # resuming checkpoint
         if args.resume is not None:
             if not os.path.isfile(args.resume):
                 raise RuntimeError("=> no checkpoint found at '{}'" .format(args.resume))
-            checkpoint = torch.load(args.resume)
+            checkpoint = torch.load(args.resume, map_location='cuda:{}'.format(self.gpu))
             args.start_epoch = checkpoint['epoch']
             if args.cuda:
                 self.model.module.load_state_dict(checkpoint['state_dict'])
@@ -95,26 +114,28 @@ class Trainer():
         # lr scheduler
         self.scheduler = utils.LR_Scheduler(args.lr_scheduler, args.lr,
                                             args.epochs, len(self.trainloader))
-        self.best_pred = 0.0
 
     def training(self, epoch):
+        self.train_sampler.set_epoch(epoch)
+
         train_loss = 0.0
         self.model.train()
         tbar = tqdm(self.trainloader)
         for i, (image, target) in enumerate(tbar):
             self.scheduler(self.optimizer, i, epoch, self.best_pred)
-            self.optimizer.zero_grad()
             if torch_ver == "0.3":
                 image = Variable(image)
                 target = Variable(target)
             outputs = self.model(image)
-            loss = self.criterion(outputs, target)
+            loss = self.criterion(outputs, target.cuda())
+
+            self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
             train_loss += loss.item()
             tbar.set_description('Train loss: %.3f' % (train_loss / (i + 1)))
 
-        if self.args.no_val:
+        if self.args.no_val and self.args.rank == 0:
             # save checkpoint every epoch
             is_best = False
             utils.save_checkpoint({
@@ -122,16 +143,15 @@ class Trainer():
                 'state_dict': self.model.module.state_dict(),
                 'optimizer': self.optimizer.state_dict(),
                 'best_pred': self.best_pred,
-            }, self.args, is_best)
+            }, self.args, is_best, filename='checkpoint_{}.pth.tar'.format(epoch))
 
 
     def validation(self, epoch):
         # Fast test during the training
         def eval_batch(model, image, target):
-            outputs = model(image)
-            outputs = gather(outputs, 0, dim=0)
-            pred = outputs[0]
             target = target.cuda()
+            outputs = model(image)
+            pred = outputs[0]
             correct, labeled = utils.batch_pix_accuracy(pred.data, target)
             inter, union = utils.batch_intersection_union(pred.data, target, self.nclass)
             return correct, labeled, inter, union
@@ -162,21 +182,31 @@ class Trainer():
         if new_pred > self.best_pred:
             is_best = True
             self.best_pred = new_pred
+        if self.args.rank == 0:
             utils.save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict': self.model.module.state_dict(),
                 'optimizer': self.optimizer.state_dict(),
                 'best_pred': self.best_pred,
-            }, self.args, is_best)
+            }, self.args, is_best, filename='checkpoint_{}.pth.tar'.format(epoch))
 
 
-if __name__ == "__main__":
-    args = Options().parse()
-    torch.manual_seed(args.seed)
-    trainer = Trainer(args)
+def main_worker(gpu, ngpus_per_node, args):
+    if gpu != 0:
+        sys.stdout = open(os.devnull, 'w')
+    trainer = Trainer(gpu, ngpus_per_node, args)
     print('Starting Epoch:', trainer.args.start_epoch)
     print('Total Epoches:', trainer.args.epochs)
     for epoch in range(trainer.args.start_epoch, trainer.args.epochs):
         trainer.training(epoch)
         if not trainer.args.no_val:
             trainer.validation(epoch)
+
+
+if __name__ == "__main__":
+    args = Options().parse()
+    torch.manual_seed(args.seed)
+
+    ngpus_per_node = torch.cuda.device_count()
+    args.world_size = ngpus_per_node * args.world_size
+    mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
