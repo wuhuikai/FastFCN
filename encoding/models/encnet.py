@@ -33,10 +33,10 @@ class EncNet(BaseNet):
         features = self.base_forward(x)
 
         x = list(self.head(*features))
-        x[0] = F.upsample(x[0], imsize, **self._up_kwargs)
+        x[0] = F.interpolate(x[0], imsize, **self._up_kwargs)
         if self.aux:
             auxout = self.auxlayer(features[2])
-            auxout = F.upsample(auxout, imsize, **self._up_kwargs)
+            auxout = F.interpolate(auxout, imsize, **self._up_kwargs)
             x.append(auxout)
         return tuple(x)
 
@@ -50,7 +50,7 @@ class EncModule(nn.Module):
             norm_layer(in_channels),
             nn.ReLU(inplace=True),
             encoding.nn.Encoding(D=in_channels, K=ncodes),
-            encoding.nn.BatchNorm1d(ncodes),
+            norm_layer(ncodes),
             nn.ReLU(inplace=True),
             encoding.nn.Mean(dim=1))
         self.fc = nn.Sequential(

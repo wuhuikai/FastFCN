@@ -25,14 +25,14 @@ class SegmentationLosses(CrossEntropyLoss):
     """2D Cross Entropy Loss with Auxilary Loss"""
     def __init__(self, se_loss=False, se_weight=0.2, nclass=-1,
                  aux=False, aux_weight=0.4, weight=None,
-                 size_average=True, ignore_index=-1):
-        super(SegmentationLosses, self).__init__(weight, size_average, ignore_index)
+                 size_average=True, ignore_index=-1, reduction='mean'):
+        super(SegmentationLosses, self).__init__(weight, ignore_index=ignore_index, reduction=reduction)
         self.se_loss = se_loss
         self.aux = aux
         self.nclass = nclass
         self.se_weight = se_weight
         self.aux_weight = aux_weight
-        self.bceloss = BCELoss(weight, size_average) 
+        self.bceloss = BCELoss(weight, reduction=reduction)
 
     def forward(self, *inputs):
         if not self.se_loss and not self.aux:
@@ -128,19 +128,19 @@ class PyramidPooling(Module):
 
     def forward(self, x):
         _, _, h, w = x.size()
-        feat1 = F.upsample(self.conv1(self.pool1(x)), (h, w), **self._up_kwargs)
-        feat2 = F.upsample(self.conv2(self.pool2(x)), (h, w), **self._up_kwargs)
-        feat3 = F.upsample(self.conv3(self.pool3(x)), (h, w), **self._up_kwargs)
-        feat4 = F.upsample(self.conv4(self.pool4(x)), (h, w), **self._up_kwargs)
+        feat1 = F.interpolate(self.conv1(self.pool1(x)), (h, w), **self._up_kwargs)
+        feat2 = F.interpolate(self.conv2(self.pool2(x)), (h, w), **self._up_kwargs)
+        feat3 = F.interpolate(self.conv3(self.pool3(x)), (h, w), **self._up_kwargs)
+        feat4 = F.interpolate(self.conv4(self.pool4(x)), (h, w), **self._up_kwargs)
         return torch.cat((x, feat1, feat2, feat3, feat4), 1)
 
 
 class SeparableConv2d(nn.Module):
-    def __init__(self, inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False, BatchNorm=nn.BatchNorm2d):
+    def __init__(self, inplanes, planes, kernel_size=3, stride=1, padding=1, dilation=1, bias=False):
         super(SeparableConv2d, self).__init__()
 
         self.conv1 = nn.Conv2d(inplanes, inplanes, kernel_size, stride, padding, dilation, groups=inplanes, bias=bias)
-        self.bn = BatchNorm(inplanes)
+        self.bn = nn.BatchNorm2d(inplanes)
         self.pointwise = nn.Conv2d(inplanes, planes, 1, 1, 0, 1, 1, bias=bias)
 
     def forward(self, x):
@@ -184,8 +184,8 @@ class JPU(nn.Module):
     def forward(self, *inputs):
         feats = [self.conv5(inputs[-1]), self.conv4(inputs[-2]), self.conv3(inputs[-3])]
         _, _, h, w = feats[-1].size()
-        feats[-2] = F.upsample(feats[-2], (h, w), **self.up_kwargs)
-        feats[-3] = F.upsample(feats[-3], (h, w), **self.up_kwargs)
+        feats[-2] = F.interpolate(feats[-2], (h, w), **self.up_kwargs)
+        feats[-3] = F.interpolate(feats[-3], (h, w), **self.up_kwargs)
         feat = torch.cat(feats, dim=1)
         feat = torch.cat([self.dilation1(feat), self.dilation2(feat), self.dilation3(feat), self.dilation4(feat)], dim=1)
 

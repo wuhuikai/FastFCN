@@ -14,12 +14,12 @@ import torchvision.transforms as transform
 from torch.nn.parallel.scatter_gather import gather
 
 import encoding.utils as utils
-from encoding.nn import SegmentationLosses, BatchNorm2d
+from encoding.nn import SegmentationLosses, SyncBatchNorm
 from encoding.parallel import DataParallelModel, DataParallelCriterion
 from encoding.datasets import get_segmentation_dataset
 from encoding.models import get_segmentation_model
 
-from option import Options
+from .option import Options
 
 torch_ver = torch.__version__[:3]
 if torch_ver == '0.3':
@@ -51,7 +51,7 @@ class Trainer():
         model = get_segmentation_model(args.model, dataset = args.dataset,
                                        backbone = args.backbone, dilated = args.dilated,
                                        lateral = args.lateral, jpu = args.jpu, aux = args.aux,
-                                       se_loss = args.se_loss, norm_layer = BatchNorm2d,
+                                       se_loss = args.se_loss, norm_layer = SyncBatchNorm,
                                        base_size = args.base_size, crop_size = args.crop_size)
         print(model)
         # optimizer using different LR
@@ -75,6 +75,7 @@ class Trainer():
             self.model = DataParallelModel(self.model).cuda()
             self.criterion = DataParallelCriterion(self.criterion).cuda()
         # resuming checkpoint
+        self.best_pred = 0.0
         if args.resume is not None:
             if not os.path.isfile(args.resume):
                 raise RuntimeError("=> no checkpoint found at '{}'" .format(args.resume))
@@ -95,7 +96,6 @@ class Trainer():
         # lr scheduler
         self.scheduler = utils.LR_Scheduler(args.lr_scheduler, args.lr,
                                             args.epochs, len(self.trainloader))
-        self.best_pred = 0.0
 
     def training(self, epoch):
         train_loss = 0.0
@@ -122,7 +122,7 @@ class Trainer():
                 'state_dict': self.model.module.state_dict(),
                 'optimizer': self.optimizer.state_dict(),
                 'best_pred': self.best_pred,
-            }, self.args, is_best)
+            }, self.args, is_best, filename='checkpoint_{}.pth.tar'.format(epoch))
 
 
     def validation(self, epoch):
@@ -162,12 +162,12 @@ class Trainer():
         if new_pred > self.best_pred:
             is_best = True
             self.best_pred = new_pred
-            utils.save_checkpoint({
-                'epoch': epoch + 1,
-                'state_dict': self.model.module.state_dict(),
-                'optimizer': self.optimizer.state_dict(),
-                'best_pred': self.best_pred,
-            }, self.args, is_best)
+        utils.save_checkpoint({
+            'epoch': epoch + 1,
+            'state_dict': self.model.module.state_dict(),
+            'optimizer': self.optimizer.state_dict(),
+            'best_pred': new_pred,
+        }, self.args, is_best)
 
 
 if __name__ == "__main__":

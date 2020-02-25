@@ -82,7 +82,7 @@ class Options():
                             help='multi scale & flip')
         parser.add_argument('--no-val', action='store_true', default= False,
                             help='skip validation during training')
-        parser.add_argument('--save-folder', type=str, default='results',
+        parser.add_argument('--save-folder', type=str, default='experiments/segmentation/results',
                             help = 'path to save images')
 
         # the parser

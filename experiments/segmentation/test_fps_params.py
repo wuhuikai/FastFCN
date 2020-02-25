@@ -3,7 +3,8 @@ import time
 import torch
 import encoding
 
-from option import Options
+from encoding.nn import BatchNorm
+from .option import Options
 
 
 if __name__ == "__main__":
@@ -11,7 +12,7 @@ if __name__ == "__main__":
     model = encoding.models.get_segmentation_model(args.model, dataset = args.dataset,
                                        backbone = args.backbone, dilated = args.dilated,
                                        lateral = args.lateral, jpu = args.jpu, aux = args.aux,
-                                       se_loss = args.se_loss, norm_layer = torch.nn.BatchNorm2d)
+                                       se_loss = args.se_loss, norm_layer = BatchNorm)
 
     num_parameters = sum([l.nelement() for l in model.pretrained.parameters()])
     print(num_parameters)

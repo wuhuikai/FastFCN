@@ -15,11 +15,11 @@ from tqdm import tqdm
 
 from torch.utils import data
 
-from encoding.nn import BatchNorm2d
+from encoding.nn import BatchNorm
 from encoding.datasets import get_segmentation_dataset, test_batchify_fn
 from encoding.models import get_model, get_segmentation_model, MultiEvalModule
 
-from option import Options
+from .option import Options
 
 
 def test(args):
@@ -47,7 +47,7 @@ def test(args):
         model = get_segmentation_model(args.model, dataset = args.dataset,
                                        backbone = args.backbone, dilated = args.dilated,
                                        lateral = args.lateral, jpu = args.jpu, aux = args.aux,
-                                       se_loss = args.se_loss, norm_layer = BatchNorm2d,
+                                       se_loss = args.se_loss, norm_layer = BatchNorm,
                                        base_size = args.base_size, crop_size = args.crop_size)
         # resuming checkpoint
         if args.resume is None or not os.path.isfile(args.resume):

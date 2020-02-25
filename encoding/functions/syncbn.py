@@ -10,63 +10,38 @@
 """Synchronized Cross-GPU Batch Normalization functions"""
 from torch.autograd import Function
 
-from .. import lib
-
-__all__ = ['sum_square', 'batchnormtrain']
+__all__ = ['normalization']
 
 
-def sum_square(input):
-    r"""Calculate sum of elements and sum of squares for Batch Normalization"""
-    return _sum_square.apply(input)
-
-
-class _sum_square(Function):
+class Normalization(Function):
     @staticmethod
-    def forward(ctx, input):
-        ctx.save_for_backward(input)
-        if input.is_cuda:
-            xsum, xsqusum = lib.gpu.sumsquare_forward(input)
-        else:
-            xsum, xsqusum = lib.cpu.sumsquare_forward(input)
-        return xsum, xsqusum
+    def forward(ctx, input, mean, inv_std, gamma, beta):
+        ctx.save_for_backward(input, mean, inv_std, gamma, beta)
 
-    @staticmethod
-    def backward(ctx, gradSum, gradSquare):
-        input, = ctx.saved_variables
-        if input.is_cuda:
-            gradInput = lib.gpu.sumsquare_backward(input, gradSum, gradSquare)
-        else:
-            raise NotImplemented
-        return gradInput
-
-
-class _batchnormtrain(Function):
-    @staticmethod
-    def forward(ctx, input, mean, std, gamma, beta):
-        ctx.save_for_backward(input, mean, std, gamma, beta)
-        if input.is_cuda:
-            output = lib.gpu.batchnorm_forward(input, mean, std, gamma, beta)
-        else:
-            output = lib.cpu.batchnorm_forward(input, mean, std, gamma, beta)
-        return output
+        return (input - mean.unsqueeze(-1)).mul_((inv_std*gamma).unsqueeze(-1)).add_(beta.unsqueeze(-1))
 
     @staticmethod
     def backward(ctx, gradOutput):
-        input, mean, std, gamma, beta = ctx.saved_variables
-        if gradOutput.is_cuda:
-            gradInput, gradMean, gradStd, gradGamma, gradBeta = \
-                lib.gpu.batchnorm_backward(gradOutput, input, mean,
-                                           std, gamma, beta, True)
-        else:
-            raise NotImplemented
-        return gradInput, gradMean, gradStd, gradGamma, gradBeta
+        input, mean, inv_std, gamma, beta = ctx.saved_variables
+
+        gradInputMean = gradOutput * (inv_std*gamma).unsqueeze(-1)
+        gradInput = gradInputMean
+        gradMean = gradInputMean.sum((0, 2)).mul_(-1)
+
+        gradInvStdGamma = (input - mean.unsqueeze(-1)).mul_(gradOutput).sum((0, 2))
+        gradInvStd = gradInvStdGamma * gamma
+        gradGamma = gradInvStdGamma * inv_std
+
+        gradBeta = gradOutput.sum((0, 2))
+
+        return gradInput, gradMean, gradInvStd, gradGamma, gradBeta
 
 
-def batchnormtrain(input, mean, std, gamma, beta):
+def normalization(input, mean, inv_std, gamma, beta):
     r"""Applies Batch Normalization over a 3d input that is seen as a
     mini-batch.
 
-    .. _encoding.batchnormtrain:
+    .. _encoding.normalization:
 
     .. math::
 
@@ -77,4 +52,15 @@ def batchnormtrain(input, mean, std, gamma, beta):
         - Output: :math:`(N, C)` or :math:`(N, C, L)` (same shape as input)
 
     """
-    return _batchnormtrain.apply(input, mean, std, gamma, beta)
+    return Normalization.apply(input, mean, inv_std, gamma, beta)
+
+if __name__ == '__main__':
+    import torch
+
+    input = torch.randn((3,4,5), dtype=torch.float64, requires_grad=True).cuda()
+    mean = torch.randn((input.size(1),), dtype=torch.float64, requires_grad=True).cuda()
+    inv_std = torch.randn((input.size(1),), dtype=torch.float64, requires_grad=True).cuda()
+    gamma = torch.randn((input.size(1),), dtype=torch.float64, requires_grad=True).cuda()
+    beta = torch.randn((input.size(1),), dtype=torch.float64, requires_grad=True).cuda()
+
+    assert torch.autograd.gradcheck(normalization, (input, mean, inv_std, gamma, beta))

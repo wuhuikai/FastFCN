@@ -4,9 +4,9 @@
 
 version.py
 
+runs/
 data/
 build/
-encoding/_ext/
-encoding.egg-info/
+results/
 
 .idea

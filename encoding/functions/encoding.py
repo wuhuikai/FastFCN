@@ -10,30 +10,27 @@
 """Functions for Encoding Layer"""
 import torch
 
-from torch.autograd import Function, Variable
-
-from .. import lib
+from torch.autograd import Function
 
 __all__ = ['aggregate', 'scaled_l2']
 
-class _aggregate(Function):
+class Aggregate(Function):
     @staticmethod
     def forward(ctx, A, X, C):
-        # A \in(BxNxK) R \in(BxNxKxD) => E \in(BxNxD)
         ctx.save_for_backward(A, X, C)
-        if A.is_cuda:
-            E = lib.gpu.aggregate_forward(A, X, C)
-        else:
-            E = lib.cpu.aggregate_forward(A, X, C)
-        return E
+
+        return (X.unsqueeze(2).expand(X.size(0), X.size(1), C.size(0), C.size(1)) -
+             C.unsqueeze(0).unsqueeze(0)).mul_(A.unsqueeze(3)).sum(1)
 
     @staticmethod
-    def backward(ctx, gradE):
+    def backward(ctx, GE):
         A, X, C = ctx.saved_variables
-        if A.is_cuda:
-            gradA, gradX, gradC = lib.gpu.aggregate_backward(gradE, A, X, C)
-        else:
-            gradA, gradX, gradC = lib.cpu.aggregate_backward(gradE, A, X, C)
+
+        gradA = (X.unsqueeze(2).expand(X.size(0), X.size(1), C.size(0), C.size(1)) -
+                 C.unsqueeze(0).unsqueeze(0)).mul_(GE.unsqueeze(1)).sum(3)
+        gradX = torch.bmm(A, GE)
+        gradC = A.sum(1).unsqueeze(2).mul(GE).mul_(-1).sum(0)
+
         return gradA, gradX, gradC
 
 def aggregate(A, X, C):
@@ -59,26 +56,29 @@ def aggregate(A, X, C):
         >>> func = encoding.aggregate()
         >>> E = func(A, X, C)
     """
-    return _aggregate.apply(A, X, C)
+    return Aggregate.apply(A, X, C)
 
-class _scaled_l2(Function):
+class ScaledL2(Function):
     @staticmethod
     def forward(ctx, X, C, S):
-        if X.is_cuda:
-            SL = lib.gpu.scaled_l2_forward(X, C, S)
-        else:
-            SL = lib.cpu.scaled_l2_forward(X, C, S)
+        SL = (X.unsqueeze(2).expand(X.size(0), X.size(1), C.size(0), C.size(1)) -
+              C.unsqueeze(0).unsqueeze(0)).pow_(2).sum(3).mul_(S.view(1, 1, C.size(0)))
         ctx.save_for_backward(X, C, S, SL)
         return SL
 
     @staticmethod
-    def backward(ctx, gradSL):
+    def backward(ctx, GSL):
         X, C, S, SL = ctx.saved_variables
-        if X.is_cuda:
-            gradX, gradC, gradS = lib.gpu.scaled_l2_backward(gradSL, X, C, S, SL)
-        else:
-            gradX, gradC, gradS = lib.cpu.scaled_l2_backward(gradSL, X, C, S, SL)
-        return gradX, gradC, gradS
+
+        tmp = (X.unsqueeze(2).expand(X.size(0), X.size(1), C.size(0), C.size(1)) - C.unsqueeze(0).unsqueeze(0)).mul_(
+            (2 * GSL).mul_(S.view(1, 1, C.size(0))).unsqueeze(3)
+        )
+
+        GX = tmp.sum(2)
+        GC = tmp.sum((0, 1)).mul_(-1)
+        GS = SL.div(S.view(1, 1, C.size(0))).mul_(GSL).sum((0, 1))
+
+        return GX, GC, GS
 
 def scaled_l2(X, C, S):
     r""" scaled_l2 distance
@@ -93,4 +93,16 @@ def scaled_l2(X, C, S):
           :math:`K` is number is codewords, :math:`D` is feature dimensions.)
         - Output: :math:`E\in\mathcal{R}^{B\times N\times K}`
     """
-    return _scaled_l2.apply(X, C, S)
+    return ScaledL2.apply(X, C, S)
+
+if __name__ == '__main__':
+    B, N, D, K = 3, 4, 5, 6
+    X = torch.randn((B, N, D), dtype=torch.double,requires_grad=True).cuda()
+    C = torch.randn((K, D), dtype=torch.double,requires_grad=True).cuda()
+    S = torch.randn((K,), dtype=torch.double,requires_grad=True).cuda()
+    assert torch.autograd.gradcheck(scaled_l2, (X, C, S))
+
+    A = torch.randn((B, N, K), dtype=torch.double, requires_grad=True).cuda()
+    X = torch.randn((B, N, D), dtype=torch.double, requires_grad=True).cuda()
+    C = torch.randn((K, D), dtype=torch.double, requires_grad=True).cuda()
+    assert torch.autograd.gradcheck(aggregate, (A, X, C))
