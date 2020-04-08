@@ -16,8 +16,16 @@ A **Faster**, **Stronger** and **Lighter** framework for semantic segmentation, 
 Contact: Hui-Kai Wu (huikaiwu@icloud.com)
 
 ## Update
+**2020-04-15: New joint upsampling module is now available !!!**
+- `--jpu [JPU|JPU_X]`: JPU is the original module in the arXiv paper; JPU_X is a pyramid version of JPU.
+
 **2020-02-20: `FastFCN` can now run on every `OS` with `PyTorch>=1.1.0` and `Python==3.*.*`**
 - Replace all `C/C++` extensions with `pure python` extensions.
+
+## Version
+1. Original code, producing the results reported in the arXiv paper. [[branch:v1.0.0]](https://github.com/wuhuikai/FastFCN/tree/v1.0.0)
+2. Pure PyTorch code, with `torch.nn.DistributedDataParallel` and `torch.nn.SyncBatchNorm`. [[branch:latest]](https://github.com/wuhuikai/FastFCN/tree/latest)
+3. Pure Python code. [[branch:master]](https://github.com/wuhuikai/FastFCN)
 
 ## Overview
 ### Framework

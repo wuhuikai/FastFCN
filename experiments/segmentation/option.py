@@ -16,8 +16,8 @@ class Options():
                             help='model name (default: encnet)')
         parser.add_argument('--backbone', type=str, default='resnet50',
                             help='backbone name (default: resnet50)')
-        parser.add_argument('--jpu', action='store_true', default=
-                            False, help='JPU')
+        parser.add_argument('--jpu', type=str, default=None,
+                            help='JPU name')
         parser.add_argument('--dilated', action='store_true', default=
                             False, help='dilation')
         parser.add_argument('--lateral', action='store_true', default=
