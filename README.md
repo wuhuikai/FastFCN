@@ -20,7 +20,7 @@ Contact: Hui-Kai Wu (huikaiwu@icloud.com)
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 python -m experiments.segmentation.test_single_image --dataset [pcontext|ade20k] \
     --model [encnet|deeplab|psp] --jpu [JPU|JPU_X] \
-    --backbone [resnet50|resnet101] [ --ms] --resume {MODEL} --input-path {INPUT} --save-path {OUTPUT}
+    --backbone [resnet50|resnet101] [--ms] --resume {MODEL} --input-path {INPUT} --save-path {OUTPUT}
 ```
 
 **2020-04-15: New joint upsampling module is now available !!!**
