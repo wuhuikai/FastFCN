@@ -16,6 +16,13 @@ A **Faster**, **Stronger** and **Lighter** framework for semantic segmentation, 
 Contact: Hui-Kai Wu (huikaiwu@icloud.com)
 
 ## Update
+**2020-04-15: Now support inference on a single image !!!**
+```bash
+CUDA_VISIBLE_DEVICES=0,1,2,3 python -m experiments.segmentation.test_single_image --dataset [pcontext|ade20k] \
+    --model [encnet|deeplab|psp] --jpu [JPU|JPU_X] \
+    --backbone [resnet50|resnet101] [ --ms] --resume {MODEL} --input-path {INPUT} --save-path {OUTPUT}
+```
+
 **2020-04-15: New joint upsampling module is now available !!!**
 - `--jpu [JPU|JPU_X]`: JPU is the original module in the arXiv paper; JPU_X is a pyramid version of JPU.
 
